@@ -1,0 +1,95 @@
+
+version: 3
+
+dotenv:
+  - ./configuration/defaults.conf
+
+tasks:
+  terraform-providers-lock:
+    desc: Lock terraform providers for all platforms
+    cmds:
+      - |
+        terraform providers lock -platform=windows_amd64 -platform=darwin_amd64 -platform=linux_amd64
+
+  terraform-fmt:
+    desc: Format terraform files
+    cmds:
+      - |
+        terraform fmt
+
+  terraform-init:
+    desc: Initialize terraform backend, providers, plugins and modules
+    deps:
+      - terraform-providers-lock
+    cmds:
+      - |
+        terraform init \
+        -backend-config="bucket=${ARTIFACTS_BUCKET_NAME}" \
+        -backend-config="prefix=${ARTIFACTS_BUCKET_TERRAFORM_PREFIX}"
+
+  switch-to-terraform-workspace:
+    dir: terraform
+    desc: Switch to the terraform workspace
+    silent: true
+    cmds:
+      - |
+        GREEN='\033[0;32m'
+        if [ "${TERRAFORM_WORKSPACE}" == "prod" ]; then
+          RED='\033[0;31m'
+          NC='\033[0m' # No Color
+          echo -e "${RED}###############################################################"
+          echo -e "# WARNING: You are about to make changes to the production    #"
+          echo -e "# environment.                                                #"
+          echo -e "#                                                             #"
+          echo -e "# If creating a feature branch, update 'TERRAFORM_WORKSPACE'  #"
+          echo -e "# in 'configuration/defaults.conf' and run this command       #"
+          echo -e "# again.                                                      #"
+          echo -e "#                                                             #"
+          echo -e "# Please confirm to proceed.                                  #"
+          echo -e "###############################################################${NC}\n"
+          read -p "Are you sure you want to proceed? (yes/no): " confirmation
+          if [ "$confirmation" != "yes" ]; then
+            echo "Operation aborted."
+            exit 1
+          fi
+        fi
+        terraform workspace new ${TERRAFORM_WORKSPACE} > /dev/null 2>&1 || true
+        terraform workspace select ${TERRAFORM_WORKSPACE}
+        echo -e "Successfully switched to terraform workspace: ${GREEN}${TERRAFORM_WORKSPACE}${NC}"
+
+  terraform-plan:
+    desc: Creates an execution plan, which lets you preview the changes that Terraform plans to make to your infrastructure.
+    cmds:
+      - task: switch-to-terraform-workspace
+      - task: terraform-init
+      - |
+        terraform plan \
+        -var "project_id=${GOOGLE_CLOUD_PROJECT_ID}" \
+        -var "project_number=${GOOGLE_PROJECT_NUMBER}" \
+        -var "region=${GOOGLE_CLOUD_PROJECT_REGION}" \
+
+  terraform-apply:
+    desc: Apply the planned changes to the target infrastructure
+    deps: [terraform-plan]
+    cmds:
+      - task: switch-to-terraform-workspace
+      - |
+        terraform apply -auto-approve \
+        -var "project_id=${GOOGLE_CLOUD_PROJECT_ID}" \
+        -var "project_number=${GOOGLE_PROJECT_NUMBER}" \
+        -var "region=${GOOGLE_CLOUD_PROJECT_REGION}"
+
+  terraform-destroy:
+    desc: Destroy the target infrastructure
+    cmds:
+      - |
+        terraform destroy -auto-approve \
+        -var "project_id=${GOOGLE_CLOUD_PROJECT_ID}" \
+        -var "project_number=${GOOGLE_PROJECT_NUMBER}" \
+        -var "region=${GOOGLE_CLOUD_PROJECT_REGION}"
+
+  terraform-upgrade-providers:
+    desc: Upgrade terraform providers
+    cmds:
+      - |
+        terraform init -upgrade
