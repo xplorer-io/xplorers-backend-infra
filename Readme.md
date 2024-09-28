@@ -62,7 +62,7 @@ Fortunately, through [workload identity federation](https://cloud.google.com/iam
 
 ![CI/CD](./assets/ci-cd.svg)
 
-### What is OIDC and How It Works in This Scenario
+## What is OIDC and How It Works in This Scenario
 
 [OpenID Connect (OIDC)](https://openid.net/developers/how-connect-works/) is an identity layer built on top of the [OAuth 2.0](https://oauth.net/2/) protocol. It allows clients to verify the identity of an end-user based on the authentication performed by an authorization server, as well as to obtain basic profile information about the end-user.
 
@@ -75,3 +75,61 @@ In this scenario, GitHub Actions uses OIDC to securely access Google Cloud resou
 3. **Access Google Cloud Resources**: The short-lived access token is used to authenticate and interact with Google Cloud services. This token has a limited lifespan and specific permissions, reducing the risk associated with long-lived credentials.
 
 By leveraging OIDC and Workload Identity Federation, this setup enhances security and simplifies credential management, ensuring that only authorized workflows can access Google Cloud resources.
+
+## Adding CI/CD to Your Repository to Deploy Infrastructure
+
+See example [Pull Request](https://github.com/xplorer-io/xplorers-api/pull/8) and Github Actions Run [here](https://github.com/xplorer-io/xplorers-api/actions/runs/11030637674/job/30793473258)
+
+1. **Create a workflow file in your repository**:
+
+    Create a GitHub Actions workflow file in your repository in location `.github/workflows/` to define the steps for deploying infrastructure to Google Cloud using Terraform. The workflow file should include the necessary steps to authenticate with Google Cloud using Workload Identity Federation.
+
+    Example workflow file:
+    ```yaml
+    name: Deploy Xplorers API to GCP
+    on: push
+
+    permissions:
+      contents: read
+      id-token: write
+
+    jobs:
+      deploy-xplorers-api:
+        name: Deploy Xplorers API to GCP
+        runs-on: ubuntu-latest
+
+        defaults:
+        run:
+            shell: bash
+
+        steps:
+        - name: Checkout
+            uses: actions/checkout@v4
+
+        - id: auth
+            uses: google-github-actions/auth@v2.0.0
+            with:
+            workload_identity_provider: ${{ secrets.GOOGLE_CLOUD_WORKLOAD_IDENTITY_PROVIDER }}
+
+        - name: Setup Terraform
+            uses: hashicorp/setup-terraform@v1
+
+        - name: Setup pnpm
+            uses: pnpm/action-setup@v4
+            with:
+            version: 9
+
+        - name: Install taskfile
+            run: |
+            sudo snap install task --classic
+
+        - name: Terraform Plan
+            run: task terraform-plan
+
+        - name: Terraform Apply
+            if: github.ref == 'refs/heads/"main"' && github.event_name == 'push'
+            run: task terraform-apply
+    ```
+
+5. **Deploy Infrastructure**:
+    Push the changes to your repository to trigger the GitHub Actions workflow. The workflow will authenticate with Google Cloud using Workload Identity Federation and deploy the infrastructure defined in the Terraform configuration.
