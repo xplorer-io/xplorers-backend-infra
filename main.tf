@@ -1,3 +1,7 @@
+data "google_compute_default_service_account" "default" {
+  project = var.project_id
+}
+
 resource "google_project_service" "apigateway" {
   service = "apigateway.googleapis.com"
 }
@@ -94,7 +98,7 @@ resource "google_project_iam_member" "github_actions_service_management_access" 
 }
 
 resource "google_service_account_iam_member" "github_actions_service_account_act_as" {
-  service_account_id = "projects/${var.project_id}/serviceAccounts/${var.project_number}-compute@developer.gserviceaccount.com"
+  service_account_id = data.google_compute_default_service_account.default.id
   role               = "roles/iam.serviceAccountUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.workload_identity_pool.name}/*"
 }
