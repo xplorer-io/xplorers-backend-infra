@@ -50,3 +50,28 @@ Due to the constraints mentioned above, the following Google Cloud services and 
 -   Service Control API
 -   [#TODO: NEED TO SCOPE PERMISSIONS] Creates Google Project Bindings for,
     -   Compute service account to access Secret Manager secrets
+-   [#TODO: NEED TO SCOPE PERMISSIONS] Workload Identity Pool and Provider for Google Cloud Workload Identity Federation
+    -  Allows Github Actions to impersonate service account and obtain short-lived token to access Google Cloud resources
+
+## CI/CD with Github Actions and Google Cloud Workload Identity Federation
+
+Historically, applications running outside the Google Cloud had to rely on service account keys to access resources within the Google Cloud. However, as service account keys are long-lived credentials with permissions to interact and change the state of resources in the cloud, they pose a security risk if not managed appropriately.
+
+
+Fortunately, through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation), external identities can be granted IAM roles directly on a resource by obtaining a short-lived federated token. This approach effectively eliminates the security and maintenance overhead associated with service account and key management.
+
+![CI/CD](./assets/ci-cd.svg)
+
+### What is OIDC and How It Works in This Scenario
+
+[OpenID Connect (OIDC)](https://openid.net/developers/how-connect-works/) is an identity layer built on top of the [OAuth 2.0](https://oauth.net/2/) protocol. It allows clients to verify the identity of an end-user based on the authentication performed by an authorization server, as well as to obtain basic profile information about the end-user.
+
+In this scenario, GitHub Actions uses OIDC to securely access Google Cloud resources without the need for long-lived service account keys. Here's how it works:
+
+1. **OIDC Token Issuance**: When a GitHub Actions workflow runs, GitHub issues an OIDC token that represents the identity of the workflow.
+
+2. **Token Exchange**: The OIDC token is then exchanged for a short-lived access token from Google Cloud. This is done through Workload Identity Federation, which trusts the OIDC token issued by GitHub.
+
+3. **Access Google Cloud Resources**: The short-lived access token is used to authenticate and interact with Google Cloud services. This token has a limited lifespan and specific permissions, reducing the risk associated with long-lived credentials.
+
+By leveraging OIDC and Workload Identity Federation, this setup enhances security and simplifies credential management, ensuring that only authorized workflows can access Google Cloud resources.
